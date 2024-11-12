@@ -9,4 +9,9 @@ pub enum Error {
     LeftIndicesCannotBeNone,
     RightIndicesCannotBeNone,
     IndexMappingCannotBeNone,
+    WrongNumberOfLeftElements(usize),
+    WrongNumberOfRightElements(usize),
+    FailedToSerializeElement,
+    RemainderAfterDivisionIsNonZero,
+    FailedToCreateCosetOfEvaluationDomain,
 }

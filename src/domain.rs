@@ -1,10 +1,13 @@
 use ark_ec::CurveGroup;
 use ark_ec::pairing::Pairing;
-use ark_ff::FftField;
+use ark_ff::{FftField, Field};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use ark_poly::univariate::DensePolynomial;
+use ark_std::Zero;
+use rayon::iter::IntoParallelRefMutIterator;
 use crate::error::Error;
 use crate::kzg::Kzg;
+use rayon::prelude::*;
 
 pub(crate) fn create_domain_with_generator<F: FftField>(
     group_gen: F,
@@ -57,4 +60,33 @@ pub(crate) fn roots_of_unity<P: Pairing>(
     domain: &Radix2EvaluationDomain<P::ScalarField>,
 ) -> Vec<P::ScalarField> {
     domain.elements().collect()
+}
+
+pub(crate) fn divide_by_vanishing_poly_checked<P: Pairing>(
+    domain: &Radix2EvaluationDomain<P::ScalarField>,
+    poly: &DensePolynomial<P::ScalarField>,
+) -> Result<DensePolynomial<P::ScalarField>, Error> {
+    let (quotient, remainder) = poly
+        .divide_by_vanishing_poly(*domain);
+
+    if !remainder.is_zero() {
+        return Err(Error::RemainderAfterDivisionIsNonZero);
+    }
+
+    Ok(quotient)
+}
+
+pub fn divide_by_vanishing_poly_on_coset_in_place<C: CurveGroup>(
+    domain: &Radix2EvaluationDomain<C::ScalarField>,
+    evaluations: &mut [C::ScalarField],
+) -> Result<(), Error> {
+    let vanishing_poly_eval = domain.evaluate_vanishing_polynomial(C::ScalarField::GENERATOR);
+    let inv_vanishing_poly_eval = vanishing_poly_eval
+        .inverse()
+        .ok_or(Error::FailedToInverseFieldElement)?;
+    evaluations
+        .par_iter_mut()
+        .for_each(|eval| *eval *= &inv_vanishing_poly_eval);
+
+    Ok(())
 }
