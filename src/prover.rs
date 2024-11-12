@@ -1,5 +1,6 @@
 use crate::domain::{divide_by_vanishing_poly_on_coset_in_place, roots_of_unity};
 use crate::error::Error;
+use crate::kzg::Kzg;
 use crate::public_parameters::PublicParameters;
 use crate::statement::Statement;
 use crate::transcript::{Label, Transcript};
@@ -8,16 +9,19 @@ use ark_ec::pairing::Pairing;
 use ark_ec::CurveGroup;
 use ark_ff::{FftField, Field};
 use ark_poly::univariate::DensePolynomial;
-use ark_poly::{DenseUVPolynomial, EvaluationDomain};
+use ark_poly::{DenseUVPolynomial, EvaluationDomain, Polynomial};
 use ark_std::rand::Rng;
 use ark_std::Zero;
 use rayon::prelude::*;
 
 pub struct Proof<P: Pairing> {
-    g2_affine_l: P::G2Affine,
-    g2_affine_r: P::G2Affine,
-    g1_affine_ql: P::G1Affine,
-    g1_affine_qr: P::G1Affine,
+    pub(crate) g2_affine_l: P::G2Affine,
+    pub(crate) g2_affine_r: P::G2Affine,
+    pub(crate) g1_affine_ql: P::G1Affine,
+    pub(crate) g1_affine_qr: P::G1Affine,
+    pub(crate) batch_proof: P::G2Affine,
+    pub(crate) l_at_zero: P::ScalarField,
+    pub(crate) r_at_zero: P::ScalarField,
 }
 
 pub fn prover<P: Pairing, R: Rng + ?Sized>(
@@ -109,7 +113,32 @@ pub fn prover<P: Pairing, R: Rng + ?Sized>(
     divide_by_vanishing_poly_on_coset_in_place::<P::G1>(&pp.domain_r, &mut poly_coset_coeff_list_qr)?;
     let coeff_qr = poly_coset_coeff_list_qr;
     let poly_qr = DensePolynomial::from_coefficients_vec(coeff_qr);
-    let g1_affine_qr = crate::kzg::Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_qr).into_affine();
+    let g1_affine_qr = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_qr).into_affine();
+
+    transcript.append_elements(
+        &[
+            (Label::G2L, g2_affine_l),
+            (Label::G2R, g2_affine_r),
+        ]
+    )?;
+    transcript.append_elements(
+        &[
+            (Label::G1Ql, g1_affine_ql),
+            (Label::G1Qr, g1_affine_qr),
+        ]
+    )?;
+    let delta = transcript.get_and_append_challenge(Label::ChallengeDelta)?;
+
+    let fr_zero = P::ScalarField::zero();
+    let batch_proof = Kzg::<P::G2>::batch_open(
+        &pp.g2_affine_srs,
+        &[poly_l.clone(), poly_r.clone()], // TODO: Optimize this.
+        fr_zero,
+        delta,
+    );
+
+    let l_at_zero = poly_l.evaluate(&fr_zero);
+    let r_at_zero = poly_r.evaluate(&fr_zero);
 
 
     Ok(Proof {
@@ -117,5 +146,8 @@ pub fn prover<P: Pairing, R: Rng + ?Sized>(
         g2_affine_r,
         g1_affine_ql,
         g1_affine_qr,
+        batch_proof,
+        l_at_zero,
+        r_at_zero,
     })
 }

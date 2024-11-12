@@ -14,4 +14,9 @@ pub enum Error {
     FailedToSerializeElement,
     RemainderAfterDivisionIsNonZero,
     FailedToCreateCosetOfEvaluationDomain,
+
+    Pairing1Failed,
+    Pairing2Failed,
+    Pairing3Failed,
+    EqualityCheckFailed,
 }

@@ -10,43 +10,16 @@ use std::marker::PhantomData;
 #[derive(Copy, Clone)]
 pub(crate) enum Label {
     ChallengeBeta,
-    // ChallengeDelta,
     ChallengeGamma,
-    // ChallengeEta,
-    // ChallengeCaulkAlpha,
-    // ChallengeCaulkBeta,
+    ChallengeDelta,
 
     PublicParameters,
     Statement,
 
-    // G1M,
-    // G1MDivW,
-    // G1Qm,
-    // G1L,
-    // G1LDivV,
-    // G1Ql,
-    // G1D,
-    // G1Qd,
-    // G1A,
-    // G1Qa,
-    // G1Qb,
-    // G1A0,
-    // G1B0,
-    // G1Px,
-    // 
-    // FrB0AtGamma,
-    // FrFAtGamma,
-    // FrLAtGamma,
-    // FrAAtZero,
-    // FrLAtGammaDivV,
-    // FrQlAtGamma,
-    // FrDAtGamma,
-    // FrQdAtGamma,
-    // 
-    // CaulkG1D,
-    // CaulkG1UBar,
-    // CaulkG1H2,
-    // CaulkG1H1,
+    G2L,
+    G2R,
+    G1Ql,
+    G1Qr,
 }
 
 impl Label {
@@ -54,8 +27,13 @@ impl Label {
         match self {
             Label::ChallengeBeta => b"beta",
             Label::ChallengeGamma => b"gamma",
+            Label::ChallengeDelta => b"delta",
             Label::PublicParameters => b"common_inputs",
             Label::Statement => b"statement",
+            Label::G2L => b"g2_l",
+            Label::G2R => b"g2_r",
+            Label::G1Ql => b"g1_ql",
+            Label::G1Qr => b"g1_qr",
         }
     }
 }
