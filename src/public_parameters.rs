@@ -18,18 +18,17 @@ use std::collections::BTreeMap;
 pub struct PublicParameters<P: Pairing> {
     pub(crate) left_element_size: usize,
     pub(crate) right_element_size: usize,
-    position_vec_size: usize,
 
     pub g1_affine_srs: Vec<P::G1Affine>,
     pub g2_affine_srs: Vec<P::G2Affine>,
 
     pub g2_affine_zl: P::G2Affine,
     pub g2_affine_zr: P::G2Affine,
-    pub g2_affine_zi: P::G2Affine,
+    // pub g2_affine_zi: P::G2Affine,
 
     pub domain_l: Radix2EvaluationDomain<P::ScalarField>,
     pub domain_r: Radix2EvaluationDomain<P::ScalarField>,
-    pub domain_i: Radix2EvaluationDomain<P::ScalarField>,
+    // pub domain_i: Radix2EvaluationDomain<P::ScalarField>,
 
     pub positions_left: Vec<usize>,
     pub positions_right: Vec<usize>,
@@ -38,7 +37,7 @@ pub struct PublicParameters<P: Pairing> {
     pub g2_affine_positions_left: P::G2Affine,
     pub g2_affine_positions_right: P::G2Affine,
 
-    pub position_mappings: BTreeMap<usize, usize>,
+    pub position_mappings: BTreeMap<usize, P::ScalarField>,
     pub poly_position_mappings: DensePolynomial<P::ScalarField>,
     pub g1_affine_position_mappings: P::G1Affine,
 
@@ -54,11 +53,9 @@ impl<P: Pairing> PublicParameters<P> {
 pub struct PublicParametersBuilder<P: Pairing> {
     left_element_size: Option<usize>,
     right_element_size: Option<usize>,
-    position_vec_size: Option<usize>,
     tau: Option<P::ScalarField>,
     domain_generator_l: Option<P::ScalarField>,
     domain_generator_r: Option<P::ScalarField>,
-    domain_generator_i: Option<P::ScalarField>,
     positions_left: Option<Vec<usize>>,
     positions_right: Option<Vec<usize>>,
     position_mappings: Option<BTreeMap<usize, usize>>,
@@ -69,11 +66,9 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         Self {
             left_element_size: None,
             right_element_size: None,
-            position_vec_size: None,
             tau: None,
             domain_generator_l: None,
             domain_generator_r: None,
-            domain_generator_i: None,
             positions_left: None,
             positions_right: None,
             position_mappings: None,
@@ -90,11 +85,6 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         self
     }
 
-    pub fn position_vec_size(mut self, size: usize) -> Self {
-        self.position_vec_size = Some(size);
-        self
-    }
-
     pub fn tau(mut self, tau: P::ScalarField) -> Self {
         self.tau = Some(tau);
         self
@@ -107,11 +97,6 @@ impl<P: Pairing> PublicParametersBuilder<P> {
 
     pub fn domain_generator_r(mut self, gen: P::ScalarField) -> Self {
         self.domain_generator_r = Some(gen);
-        self
-    }
-
-    pub fn domain_generator_i(mut self, gen: P::ScalarField) -> Self {
-        self.domain_generator_i = Some(gen);
         self
     }
 
@@ -138,9 +123,6 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         Element Size"))?;
         validate_input(right_element_size, None)?;
         let pow_of_tau_g1 = max(left_element_size, right_element_size);
-        let position_vec_size = self.position_vec_size.ok_or(Error::MissingParameter("Index \
-        Size"))?;
-        validate_input(position_vec_size, Some(pow_of_tau_g1))?;
 
         let tau = self.tau.unwrap_or(P::ScalarField::rand(rng));
         let (g1_affine_srs, g2_affine_srs) = unsafe_setup_from_tau::<P, R>(pow_of_tau_g1, tau);
@@ -149,8 +131,8 @@ impl<P: Pairing> PublicParametersBuilder<P> {
                                                                                             .domain_generator_l, left_element_size, &g2_affine_srs)?;
         let (domain_r, g2_affine_zr) = create_domain_and_vanishing_poly_commitment::<P>(self
                                                                                             .domain_generator_r, right_element_size, &g2_affine_srs)?;
-        let (domain_i, g2_affine_zi) = create_domain_and_vanishing_poly_commitment::<P>(self
-                                                                                            .domain_generator_i, position_vec_size, &g2_affine_srs)?;
+        // let (domain_i, g2_affine_zi) = create_domain_and_vanishing_poly_commitment::<P>(self
+        //                                                                                     .domain_generator_i, position_vec_size, &g2_affine_srs)?;
 
         let positions_left = self.positions_left.ok_or(Error::LeftIndicesCannotBeNone)?;
         let positions_right = self.positions_right.ok_or(Error::RightIndicesCannotBeNone)?;
@@ -161,7 +143,7 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         positions_left.iter().for_each(|&i| {
             poly_eval_positions_left[i] = P::ScalarField::one();
         });
-        let coeff_positions_left = domain_i.ifft(&poly_eval_positions_left);
+        let coeff_positions_left = domain_l.ifft(&poly_eval_positions_left);
         let poly_positions_left = DensePolynomial::from_coefficients_vec(coeff_positions_left);
         let g2_affine_positions_left = Kzg::<P::G2>::commit(&g2_affine_srs, &poly_positions_left)
             .into_affine();
@@ -171,7 +153,7 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         positions_right.iter().for_each(|&i| {
             poly_eval_positions_right[i] = P::ScalarField::one();
         });
-        let coeff_positions_right = domain_i.ifft(&poly_eval_positions_right);
+        let coeff_positions_right = domain_r.ifft(&poly_eval_positions_right);
         let poly_positions_right = DensePolynomial::from_coefficients_vec(coeff_positions_right);
         let g2_affine_positions_right = Kzg::<P::G2>::commit(&g2_affine_srs,
                                                              &poly_positions_right).into_affine();
@@ -180,8 +162,11 @@ impl<P: Pairing> PublicParametersBuilder<P> {
                                                                         left_element_size];
         let roots_of_unity_r = roots_of_unity::<P>(&domain_r);
         // TODO: Optimize this.
+        let mut fr_position_mappings = BTreeMap::new(); 
         position_mappings.iter().for_each(|(&key, &value)| {
-            poly_eval_position_mappings[key] = roots_of_unity_r[value];
+            let eval  =roots_of_unity_r[value];
+            poly_eval_position_mappings[key] = eval;
+            fr_position_mappings.insert(key, eval);
         });
         domain_l.ifft_in_place(&mut poly_eval_position_mappings);
         let coeff_position_mappings = poly_eval_position_mappings;
@@ -193,17 +178,16 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         let mut buf = Vec::new();
         serialize_usize(left_element_size, &mut buf);
         serialize_usize(right_element_size, &mut buf);
-        serialize_usize(position_vec_size, &mut buf);
 
         g1_affine_srs.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
         g2_affine_srs.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
         g2_affine_zl.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
         g2_affine_zr.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
-        g2_affine_zi.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
+        // g2_affine_zi.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
 
         domain_l.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
         domain_r.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
-        domain_i.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
+        // domain_i.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
 
         positions_left.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_|
             Error::FailedToSerializeElement)?;
@@ -227,26 +211,25 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         blake2b_hasher.update(&buf);
         let hash_representation = blake2b_hasher.finalize().to_vec();
 
+        println!("domain l elements: {:?}", domain_l.elements().collect::<Vec<_>>());
+        println!("domain r elements: {:?}", domain_r.elements().collect::<Vec<_>>());
 
         Ok(PublicParameters {
             left_element_size,
             right_element_size,
-            position_vec_size,
             g1_affine_srs,
             g2_affine_srs,
             g2_affine_zl,
             g2_affine_zr,
-            g2_affine_zi,
             domain_l,
             domain_r,
-            domain_i,
             positions_left,
             positions_right,
             poly_positions_left,
             poly_positions_right,
             g2_affine_positions_left,
             g2_affine_positions_right,
-            position_mappings,
+            position_mappings: fr_position_mappings,
             poly_position_mappings,
             g1_affine_position_mappings,
             hash_representation,

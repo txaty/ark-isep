@@ -1,5 +1,4 @@
 use crate::error::Error;
-use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 use merlin::Transcript as MerlinTranscript;

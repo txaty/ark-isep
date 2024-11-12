@@ -5,10 +5,9 @@ use crate::statement::Statement;
 use crate::transcript::{Label, Transcript};
 use ark_ec::pairing::Pairing;
 use ark_ec::{CurveGroup, PrimeGroup};
-use ark_std::rand::Rng;
 use std::ops::Mul;
 
-pub fn verify<P: Pairing, R: Rng + ?Sized>(
+pub fn verify<P: Pairing>(
     pp: &PublicParameters<P>,
     statement: &Statement<P>,
     proof: &Proof<P>,
@@ -25,7 +24,7 @@ pub fn verify<P: Pairing, R: Rng + ?Sized>(
 
     // Pairing check of left-side.
     let tmp = pp.g1_affine_position_mappings.mul(gamma);
-    let pairing_left = P::pairing(statement.left_commitment + tmp, proof.g2_affine_l);
+    let pairing_left = P::pairing(statement.g1_affine_left_elements + tmp, proof.g2_affine_l);
     let g1_one = pp.g1_affine_srs[0];
     let tmp = proof.g2_affine_l.mul(-beta);
     let tmp = tmp + pp.g2_affine_positions_left;
@@ -39,7 +38,7 @@ pub fn verify<P: Pairing, R: Rng + ?Sized>(
 
     // Pairing check of right-side.
     let tmp = pp.g1_affine_srs[1].mul(gamma);
-    let pairing_left = P::pairing(statement.right_commitment + tmp, proof.g2_affine_r);
+    let pairing_left = P::pairing(statement.g1_affine_right_elements + tmp, proof.g2_affine_r);
     let tmp = proof.g2_affine_r.mul(-beta);
     let tmp = tmp + pp.g2_affine_positions_right;
     let pairing_right = P::multi_pairing(

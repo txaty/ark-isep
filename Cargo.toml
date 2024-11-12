@@ -12,3 +12,6 @@ ark-std = { version = "0.5.0", features = ["parallel"] }
 ark-serialize = { version = "0.5.0", default-features = false, features = ["derive"] }
 merlin = { version = "3.0.0" }
 blake2 = "0.10.6"
+
+[dev-dependencies]
+ark-bn254 = "0.5.0"

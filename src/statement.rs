@@ -9,8 +9,8 @@ use ark_serialize::CanonicalSerialize;
 use blake2::{Blake2b512, Digest};
 
 pub struct Statement<P: Pairing> {
-    pub(crate) left_commitment: P::G1Affine,
-    pub(crate) right_commitment: P::G1Affine,
+    pub(crate) g1_affine_left_elements: P::G1Affine,
+    pub(crate) g1_affine_right_elements: P::G1Affine,
     pub(crate) hash_representation: Vec<u8>,
 }
 
@@ -28,8 +28,8 @@ impl<P: Pairing> Witness<P> {
         let hash_representation = hasher.finalize().to_vec();
 
         Ok(Statement {
-            left_commitment,
-            right_commitment,
+            g1_affine_left_elements: left_commitment,
+            g1_affine_right_elements: right_commitment,
             hash_representation,
         })
     }

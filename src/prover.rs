@@ -10,7 +10,6 @@ use ark_ec::CurveGroup;
 use ark_ff::{FftField, Field};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, Polynomial};
-use ark_std::rand::Rng;
 use ark_std::Zero;
 use rayon::prelude::*;
 
@@ -24,7 +23,7 @@ pub struct Proof<P: Pairing> {
     pub(crate) r_at_zero: P::ScalarField,
 }
 
-pub fn prover<P: Pairing, R: Rng + ?Sized>(
+pub fn prover<P: Pairing>(
     pp: &PublicParameters<P>,
     witness: &Witness<P>,
     statement: &Statement<P>,
@@ -41,9 +40,10 @@ pub fn prover<P: Pairing, R: Rng + ?Sized>(
 
     // Construct the polynomial representing the left half.
     let mut poly_eval_l = vec![P::ScalarField::zero(); pp.left_element_size];
+    println!("left elements: {:?}", witness.left_elements);
     pp.positions_left.iter().try_for_each(|&i| {
         let mut eval = beta + witness.left_elements[i];
-        let fr_mapping = P::ScalarField::from(pp.position_mappings[&i] as u64);
+        let fr_mapping = pp.position_mappings[&i];
         eval += gamma * fr_mapping;
         eval = eval.inverse().ok_or(Error::FailedToInverseFieldElement)?;
         poly_eval_l[i] = eval;
@@ -51,8 +51,8 @@ pub fn prover<P: Pairing, R: Rng + ?Sized>(
         Ok(())
     })?;
     let coeff_l = pp.domain_l.ifft(&poly_eval_l);
-    let poly_l = ark_poly::univariate::DensePolynomial::from_coefficients_vec(coeff_l);
-    let g2_affine_l = crate::kzg::Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_l).into_affine();
+    let poly_l = DensePolynomial::from_coefficients_vec(coeff_l);
+    let g2_affine_l = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_l).into_affine();
 
     // Construct the quotient polynomial of the left half.
     let domain_coset_l = pp.domain_l
@@ -72,10 +72,11 @@ pub fn prover<P: Pairing, R: Rng + ?Sized>(
         .collect();
     domain_coset_l.ifft_in_place(&mut poly_coset_eval_list_ql);
     let mut poly_coset_coeff_list_ql = poly_coset_eval_list_ql;
-    divide_by_vanishing_poly_on_coset_in_place::<P::G1>(&pp.domain_l, &mut poly_coset_coeff_list_ql)?;
+    divide_by_vanishing_poly_on_coset_in_place::<P::G1>(&pp.domain_l, &mut 
+        poly_coset_coeff_list_ql)?;
     let coeff_ql = poly_coset_coeff_list_ql;
     let poly_ql = DensePolynomial::from_coefficients_vec(coeff_ql);
-    let g1_affine_ql = crate::kzg::Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_ql).into_affine();
+    let g1_affine_ql = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_ql).into_affine();
 
     // Construct the polynomial representing the right half.
     let mut poly_eval_r = vec![P::ScalarField::zero(); pp.right_element_size];
