@@ -23,7 +23,7 @@ pub struct Proof<P: Pairing> {
     pub(crate) r_at_zero: P::ScalarField,
 }
 
-pub fn prover<P: Pairing>(
+pub fn prove<P: Pairing>(
     pp: &PublicParameters<P>,
     witness: &Witness<P>,
     statement: &Statement<P>,

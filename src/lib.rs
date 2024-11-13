@@ -14,7 +14,7 @@ const COMPRESS_MOD: Compress = Compress::Yes;
 
 #[cfg(test)]
 mod tests {
-    use crate::prover::prover;
+    use crate::prover::prove;
     use crate::public_parameters::PublicParameters;
     use crate::verifier::verify;
     use crate::witness::Witness;
@@ -50,7 +50,7 @@ mod tests {
         let witness = Witness::new(&pp, &left_witness_values, &right_witness_values).unwrap();
         let statement = witness.generate_statement(&pp).unwrap();
 
-        let proof = prover::<Bn254>(&pp, &witness, &statement).unwrap();
+        let proof = prove::<Bn254>(&pp, &witness, &statement).unwrap();
         verify::<Bn254>(&pp, &statement, &proof).unwrap();
         
         // Wrong common witness value.
@@ -61,7 +61,7 @@ mod tests {
         let witness = Witness::new(&pp, &left_witness_values, &right_witness_values).unwrap();
         let statement = witness.generate_statement(&pp).unwrap();
         
-        let proof = prover::<Bn254>(&pp, &witness, &statement).unwrap();
+        let proof = prove::<Bn254>(&pp, &witness, &statement).unwrap();
         assert!(verify::<Bn254>(&pp, &statement, &proof).is_err());
     }
 }
