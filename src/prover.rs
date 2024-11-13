@@ -35,23 +35,26 @@ pub fn prover<P: Pairing>(
     ])?;
 
     // Sample random beta, gamma.
-    let beta = transcript.get_and_append_challenge(Label::ChallengeBeta)?;
-    let gamma = transcript.get_and_append_challenge(Label::ChallengeGamma)?;
+    let beta = transcript.squeeze_challenge(Label::ChallengeBeta)?;
+    let gamma = transcript.squeeze_challenge(Label::ChallengeGamma)?;
 
     // Construct the polynomial representing the left half.
-    let mut poly_eval_l = vec![P::ScalarField::zero(); pp.left_element_size];
-    println!("left elements: {:?}", witness.left_elements);
-    pp.positions_left.iter().try_for_each(|&i| {
-        let mut eval = beta + witness.left_elements[i];
-        let fr_mapping = pp.position_mappings[&i];
-        eval += gamma * fr_mapping;
-        eval = eval.inverse().ok_or(Error::FailedToInverseFieldElement)?;
-        poly_eval_l[i] = eval;
+    let mut poly_eval_l = vec![P::ScalarField::zero(); pp.size_left_values];
+    let non_zero_eval_list: Result<Vec<(usize, P::ScalarField)>, Error> = pp.positions_left
+        .par_iter() // Parallel iterator
+        .map(|&i| {
+            let eval = beta + witness.left_elements[i] + gamma * pp.position_mappings[&i];
+            let inv = eval.inverse().ok_or(Error::FailedToInverseFieldElement)?;
 
-        Ok(())
-    })?;
-    let coeff_l = pp.domain_l.ifft(&poly_eval_l);
-    let poly_l = DensePolynomial::from_coefficients_vec(coeff_l);
+            Ok((i, inv))
+        })
+        .collect();
+    let non_zero_eval_list = non_zero_eval_list?;
+    non_zero_eval_list.iter().for_each(|(i, eval)| {
+        poly_eval_l[*i] = *eval;
+    });
+    let poly_coeff_l = pp.domain_l.ifft(&poly_eval_l);
+    let poly_l = DensePolynomial::from_coefficients_vec(poly_coeff_l);
     let g2_affine_l = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_l).into_affine();
 
     // Construct the quotient polynomial of the left half.
@@ -72,27 +75,28 @@ pub fn prover<P: Pairing>(
         .collect();
     domain_coset_l.ifft_in_place(&mut poly_coset_eval_list_ql);
     let mut poly_coset_coeff_list_ql = poly_coset_eval_list_ql;
-    divide_by_vanishing_poly_on_coset_in_place::<P::G1>(&pp.domain_l, &mut 
+    divide_by_vanishing_poly_on_coset_in_place::<P::G1>(&pp.domain_l, &mut
         poly_coset_coeff_list_ql)?;
     let coeff_ql = poly_coset_coeff_list_ql;
     let poly_ql = DensePolynomial::from_coefficients_vec(coeff_ql);
     let g1_affine_ql = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_ql).into_affine();
 
     // Construct the polynomial representing the right half.
-    let mut poly_eval_r = vec![P::ScalarField::zero(); pp.right_element_size];
+    let mut poly_eval_r = vec![P::ScalarField::zero(); pp.size_right_values];
     let roots_of_unity_r = roots_of_unity::<P>(&pp.domain_r);
-    pp.positions_right.iter().try_for_each(|&i| {
-        let mut eval = beta + witness.right_elements[i];
-        let fr_mapping = roots_of_unity_r[i];
-        eval += gamma * fr_mapping;
-        eval = eval.inverse().ok_or(Error::FailedToInverseFieldElement)?;
-        poly_eval_r[i] = eval;
+    let non_zero_eval_list: Result<Vec<(usize, P::ScalarField)>, Error> = pp.positions_right.par_iter().map(|&i| {
+        let eval = beta + witness.right_elements[i] + gamma * roots_of_unity_r[i];
+        let inv = eval.inverse().ok_or(Error::FailedToInverseFieldElement)?;
 
-        Ok(())
-    })?;
-    let coeff_r = pp.domain_r.ifft(&poly_eval_r);
-    let poly_r = DensePolynomial::from_coefficients_vec(coeff_r);
-    let g2_affine_r = crate::kzg::Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_r).into_affine();
+        Ok((i, inv))
+    }).collect();
+    let non_zero_eval_list = non_zero_eval_list?;
+    non_zero_eval_list.iter().for_each(|(i, eval)| {
+        poly_eval_r[*i] = *eval;
+    });
+    let poly_coeff_r = pp.domain_r.ifft(&poly_eval_r);
+    let poly_r = DensePolynomial::from_coefficients_vec(poly_coeff_r);
+    let g2_affine_r = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_r).into_affine();
 
     // Construct the quotient polynomial of the right half.
     let domain_coset_r = pp.domain_r
@@ -128,19 +132,23 @@ pub fn prover<P: Pairing>(
             (Label::G1Qr, g1_affine_qr),
         ]
     )?;
-    let delta = transcript.get_and_append_challenge(Label::ChallengeDelta)?;
 
     let fr_zero = P::ScalarField::zero();
-    let batch_proof = Kzg::<P::G2>::batch_open(
-        &pp.g2_affine_srs,
-        &[poly_l.clone(), poly_r.clone()], // TODO: Optimize this.
-        fr_zero,
-        delta,
-    );
-
     let l_at_zero = poly_l.evaluate(&fr_zero);
     let r_at_zero = poly_r.evaluate(&fr_zero);
 
+    transcript.append_elements(
+        &[
+            (Label::FrLAtZero, l_at_zero),
+            (Label::FrRAtZero, r_at_zero),
+        ]
+    )?;
+    // Sample random delta.
+    let delta = transcript.squeeze_challenge(Label::ChallengeDelta)?;
+
+    let mut poly_batched = poly_l + &poly_r * delta;
+    poly_batched.coeffs.drain(0..1);
+    let batch_proof = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_batched).into_affine();
 
     Ok(Proof {
         g2_affine_l,

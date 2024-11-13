@@ -17,8 +17,12 @@ pub(crate) enum Label {
 
     G2L,
     G2R,
+    
     G1Ql,
     G1Qr,
+    
+    FrLAtZero,
+    FrRAtZero,
 }
 
 impl Label {
@@ -33,6 +37,8 @@ impl Label {
             Label::G2R => b"g2_r",
             Label::G1Ql => b"g1_ql",
             Label::G1Qr => b"g1_qr",
+            Label::FrLAtZero => b"fr_l_at_zero",
+            Label::FrRAtZero => b"fr_r_at_zero",
         }
     }
 }
@@ -57,7 +63,7 @@ impl<F: PrimeField> Transcript<F> {
     }
 
     /// Get a uniform random field element for field size < 384
-    pub(crate) fn get_and_append_challenge(&mut self, label: Label) -> Result<F, Error> {
+    pub(crate) fn squeeze_challenge(&mut self, label: Label) -> Result<F, Error> {
         let mut bytes = [0u8; 64];
         self.transcript
             .challenge_bytes(label.as_bytes(), &mut bytes);

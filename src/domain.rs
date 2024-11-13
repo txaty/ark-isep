@@ -1,12 +1,11 @@
-use ark_ec::CurveGroup;
-use ark_ec::pairing::Pairing;
-use ark_ff::{FftField, Field};
-use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
-use ark_poly::univariate::DensePolynomial;
-use ark_std::Zero;
-use rayon::iter::IntoParallelRefMutIterator;
 use crate::error::Error;
 use crate::kzg::Kzg;
+use ark_ec::pairing::Pairing;
+use ark_ec::CurveGroup;
+use ark_ff::{FftField, Field};
+use ark_poly::univariate::DensePolynomial;
+use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
+use rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 
 pub(crate) fn create_domain_with_generator<F: FftField>(
@@ -60,20 +59,6 @@ pub(crate) fn roots_of_unity<P: Pairing>(
     domain: &Radix2EvaluationDomain<P::ScalarField>,
 ) -> Vec<P::ScalarField> {
     domain.elements().collect()
-}
-
-pub(crate) fn divide_by_vanishing_poly_checked<P: Pairing>(
-    domain: &Radix2EvaluationDomain<P::ScalarField>,
-    poly: &DensePolynomial<P::ScalarField>,
-) -> Result<DensePolynomial<P::ScalarField>, Error> {
-    let (quotient, remainder) = poly
-        .divide_by_vanishing_poly(*domain);
-
-    if !remainder.is_zero() {
-        return Err(Error::RemainderAfterDivisionIsNonZero);
-    }
-
-    Ok(quotient)
 }
 
 pub fn divide_by_vanishing_poly_on_coset_in_place<C: CurveGroup>(

@@ -10,25 +10,22 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::rand::Rng;
 use ark_std::{One, UniformRand, Zero};
 use blake2::{Blake2b512, Digest};
-use rayon::prelude::*;
 use std::cmp::max;
 use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct PublicParameters<P: Pairing> {
-    pub(crate) left_element_size: usize,
-    pub(crate) right_element_size: usize,
+    pub size_left_values: usize,
+    pub size_right_values: usize,
 
     pub g1_affine_srs: Vec<P::G1Affine>,
     pub g2_affine_srs: Vec<P::G2Affine>,
 
     pub g2_affine_zl: P::G2Affine,
     pub g2_affine_zr: P::G2Affine,
-    // pub g2_affine_zi: P::G2Affine,
 
     pub domain_l: Radix2EvaluationDomain<P::ScalarField>,
     pub domain_r: Radix2EvaluationDomain<P::ScalarField>,
-    // pub domain_i: Radix2EvaluationDomain<P::ScalarField>,
 
     pub positions_left: Vec<usize>,
     pub positions_right: Vec<usize>,
@@ -41,7 +38,7 @@ pub struct PublicParameters<P: Pairing> {
     pub poly_position_mappings: DensePolynomial<P::ScalarField>,
     pub g1_affine_position_mappings: P::G1Affine,
 
-    pub hash_representation: Vec<u8>,
+    pub(crate) hash_representation: Vec<u8>,
 }
 
 impl<P: Pairing> PublicParameters<P> {
@@ -51,8 +48,8 @@ impl<P: Pairing> PublicParameters<P> {
 }
 
 pub struct PublicParametersBuilder<P: Pairing> {
-    left_element_size: Option<usize>,
-    right_element_size: Option<usize>,
+    size_left_values: Option<usize>,
+    size_right_values: Option<usize>,
     tau: Option<P::ScalarField>,
     domain_generator_l: Option<P::ScalarField>,
     domain_generator_r: Option<P::ScalarField>,
@@ -64,8 +61,8 @@ pub struct PublicParametersBuilder<P: Pairing> {
 impl<P: Pairing> PublicParametersBuilder<P> {
     fn default() -> Self {
         Self {
-            left_element_size: None,
-            right_element_size: None,
+            size_left_values: None,
+            size_right_values: None,
             tau: None,
             domain_generator_l: None,
             domain_generator_r: None,
@@ -76,12 +73,12 @@ impl<P: Pairing> PublicParametersBuilder<P> {
     }
 
     pub fn left_element_size(mut self, size: usize) -> Self {
-        self.left_element_size = Some(size);
+        self.size_left_values = Some(size);
         self
     }
 
     pub fn right_element_size(mut self, size: usize) -> Self {
-        self.right_element_size = Some(size);
+        self.size_right_values = Some(size);
         self
     }
 
@@ -116,10 +113,10 @@ impl<P: Pairing> PublicParametersBuilder<P> {
     }
 
     pub fn build<R: Rng + ?Sized>(self, rng: &mut R) -> Result<PublicParameters<P>, Error> {
-        let left_element_size = self.left_element_size.ok_or(Error::MissingParameter("Left \
+        let left_element_size = self.size_left_values.ok_or(Error::MissingParameter("Left \
         Element Size"))?;
         validate_input(left_element_size, None)?;
-        let right_element_size = self.right_element_size.ok_or(Error::MissingParameter("Right \
+        let right_element_size = self.size_right_values.ok_or(Error::MissingParameter("Right \
         Element Size"))?;
         validate_input(right_element_size, None)?;
         let pow_of_tau_g1 = max(left_element_size, right_element_size);
@@ -127,44 +124,47 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         let tau = self.tau.unwrap_or(P::ScalarField::rand(rng));
         let (g1_affine_srs, g2_affine_srs) = unsafe_setup_from_tau::<P, R>(pow_of_tau_g1, tau);
 
-        let (domain_l, g2_affine_zl) = create_domain_and_vanishing_poly_commitment::<P>(self
-                                                                                            .domain_generator_l, left_element_size, &g2_affine_srs)?;
-        let (domain_r, g2_affine_zr) = create_domain_and_vanishing_poly_commitment::<P>(self
-                                                                                            .domain_generator_r, right_element_size, &g2_affine_srs)?;
-        // let (domain_i, g2_affine_zi) = create_domain_and_vanishing_poly_commitment::<P>(self
-        //                                                                                     .domain_generator_i, position_vec_size, &g2_affine_srs)?;
+        let (domain_l, g2_affine_zl) = create_domain_and_g2_affine_vanishing_poly::<P>(
+            self.domain_generator_l,
+            left_element_size,
+            &g2_affine_srs,
+        )?;
+        let (domain_r, g2_affine_zr) = create_domain_and_g2_affine_vanishing_poly::<P>(
+            self.domain_generator_r,
+            right_element_size,
+            &g2_affine_srs,
+        )?;
 
         let positions_left = self.positions_left.ok_or(Error::LeftIndicesCannotBeNone)?;
         let positions_right = self.positions_right.ok_or(Error::RightIndicesCannotBeNone)?;
         let position_mappings = self.position_mappings.ok_or(Error::IndexMappingCannotBeNone)?;
 
-        let mut poly_eval_positions_left = vec![P::ScalarField::zero(); left_element_size];
-        // TODO: Optimize this.
+        let fr_zero = P::ScalarField::zero();
+        let fr_one = P::ScalarField::one();
+        let mut poly_eval_positions_left = vec![fr_zero; left_element_size];
         positions_left.iter().for_each(|&i| {
-            poly_eval_positions_left[i] = P::ScalarField::one();
+            poly_eval_positions_left[i] = fr_one;
         });
         let coeff_positions_left = domain_l.ifft(&poly_eval_positions_left);
         let poly_positions_left = DensePolynomial::from_coefficients_vec(coeff_positions_left);
         let g2_affine_positions_left = Kzg::<P::G2>::commit(&g2_affine_srs, &poly_positions_left)
             .into_affine();
 
-        let mut poly_eval_positions_right = vec![P::ScalarField::zero(); right_element_size];
-        // TODO: Optimize this.
+        let mut poly_eval_positions_right = vec![fr_zero; right_element_size];
         positions_right.iter().for_each(|&i| {
-            poly_eval_positions_right[i] = P::ScalarField::one();
+            poly_eval_positions_right[i] = fr_one;
         });
         let coeff_positions_right = domain_r.ifft(&poly_eval_positions_right);
         let poly_positions_right = DensePolynomial::from_coefficients_vec(coeff_positions_right);
         let g2_affine_positions_right = Kzg::<P::G2>::commit(&g2_affine_srs,
                                                              &poly_positions_right).into_affine();
 
-        let mut poly_eval_position_mappings: Vec<P::ScalarField> = vec![P::ScalarField::zero();
+        let mut poly_eval_position_mappings: Vec<P::ScalarField> = vec![fr_zero;
                                                                         left_element_size];
         let roots_of_unity_r = roots_of_unity::<P>(&domain_r);
-        // TODO: Optimize this.
-        let mut fr_position_mappings = BTreeMap::new(); 
+        let mut fr_position_mappings = BTreeMap::new();
         position_mappings.iter().for_each(|(&key, &value)| {
-            let eval  =roots_of_unity_r[value];
+            let eval = roots_of_unity_r[value];
             poly_eval_position_mappings[key] = eval;
             fr_position_mappings.insert(key, eval);
         });
@@ -183,11 +183,9 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         g2_affine_srs.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
         g2_affine_zl.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
         g2_affine_zr.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
-        // g2_affine_zi.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
 
         domain_l.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
         domain_r.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
-        // domain_i.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_| Error::FailedToSerializeElement)?;
 
         positions_left.serialize_with_mode(&mut buf, COMPRESS_MOD).map_err(|_|
             Error::FailedToSerializeElement)?;
@@ -211,12 +209,9 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         blake2b_hasher.update(&buf);
         let hash_representation = blake2b_hasher.finalize().to_vec();
 
-        println!("domain l elements: {:?}", domain_l.elements().collect::<Vec<_>>());
-        println!("domain r elements: {:?}", domain_r.elements().collect::<Vec<_>>());
-
         Ok(PublicParameters {
-            left_element_size,
-            right_element_size,
+            size_left_values: left_element_size,
+            size_right_values: right_element_size,
             g1_affine_srs,
             g2_affine_srs,
             g2_affine_zl,
@@ -249,7 +244,7 @@ fn validate_input(input: usize, max_limit: Option<usize>) -> Result<(), Error> {
     Ok(())
 }
 
-fn create_domain_and_vanishing_poly_commitment<P: Pairing>(
+fn create_domain_and_g2_affine_vanishing_poly<P: Pairing>(
     domain_generator: Option<P::ScalarField>,
     domain_size: usize,
     g2_affine_srs: &[P::G2Affine],
@@ -260,8 +255,10 @@ fn create_domain_and_vanishing_poly_commitment<P: Pairing>(
             |generator| create_domain_with_generator::<P::ScalarField>(generator, domain_size),
         )?;
 
-    let g2_affine_vanishing_poly = vanishing_poly_commitment_affine::<P::G2>(g2_affine_srs,
-                                                                             &domain);
+    let g2_affine_vanishing_poly = vanishing_poly_commitment_affine::<P::G2>(
+        g2_affine_srs,
+        &domain,
+    );
 
     Ok((domain, g2_affine_vanishing_poly))
 }
