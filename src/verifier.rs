@@ -23,7 +23,7 @@ pub fn verify<P: Pairing>(
     let gamma = transcript.squeeze_challenge(Label::ChallengeGamma)?;
 
     // Pairing check of left-side.
-    let g1_tmp = pp.g1_affine_position_mappings.mul(gamma) + statement.g1_affine_left_elements;
+    let g1_tmp = pp.g1_affine_position_mappings.mul(gamma) + statement.g1_affine_left_values;
     let pairing_left = P::pairing(g1_tmp, proof.g2_affine_l);
     let g1_one = pp.g1_affine_srs[0].into_group();
     let g2_l = proof.g2_affine_l.into_group();
@@ -41,7 +41,7 @@ pub fn verify<P: Pairing>(
     // Pairing check of right-side.
     let g1_tau = pp.g1_affine_srs[1].into_group();
     let pairing_left = P::pairing(
-        statement.g1_affine_right_elements + g1_tau.mul(gamma),
+        statement.g1_affine_right_values + g1_tau.mul(gamma),
         proof.g2_affine_r,
     );
     let tmp = proof.g2_affine_r.mul(-beta);

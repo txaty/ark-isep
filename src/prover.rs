@@ -7,7 +7,7 @@ use crate::transcript::{Label, Transcript};
 use crate::witness::Witness;
 use ark_ec::pairing::Pairing;
 use ark_ec::CurveGroup;
-use ark_ff::{FftField, Field};
+use ark_ff::Field;
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, Polynomial};
 use ark_std::Zero;
@@ -43,7 +43,7 @@ pub fn prove<P: Pairing>(
     let non_zero_eval_list: Result<Vec<(usize, P::ScalarField)>, Error> = pp.positions_left
         .par_iter() // Parallel iterator
         .map(|&i| {
-            let eval = beta + witness.left_elements[i] + gamma * pp.position_mappings[&i];
+            let eval = beta + witness.left_values[i] + gamma * pp.position_mappings[&i];
             let inv = eval.inverse().ok_or(Error::FailedToInverseFieldElement)?;
 
             Ok((i, inv))
@@ -58,23 +58,17 @@ pub fn prove<P: Pairing>(
     let g2_affine_l = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_l).into_affine();
 
     // Construct the quotient polynomial of the left half.
-    let domain_coset_l = pp.domain_l
-        .get_coset(P::ScalarField::GENERATOR)
-        .ok_or(Error::FailedToCreateCosetOfEvaluationDomain)?;
-
-    let poly_coset_eval_list_l = domain_coset_l.fft(&poly_l);
-    let poly_coset_eval_list_left_elements = domain_coset_l.fft(&witness.poly_left_elements);
-    let poly_coset_eval_list_positions_left = domain_coset_l.fft(&pp.poly_positions_left);
-    let poly_coset_eval_position_mappings = domain_coset_l.fft(&pp.poly_position_mappings);
-    let mut poly_coset_eval_list_ql: Vec<P::ScalarField> = poly_coset_eval_list_l
+    let coset_eval_list_l = pp.domain_coset_l.fft(&poly_l);
+    let coset_eval_list_left_values = pp.domain_coset_l.fft(&witness.poly_left_values);
+    let mut coset_eval_list_ql: Vec<P::ScalarField> = coset_eval_list_l
         .par_iter()
-        .zip(poly_coset_eval_list_left_elements.par_iter())
-        .zip(poly_coset_eval_list_positions_left.par_iter())
-        .zip(poly_coset_eval_position_mappings.par_iter())
-        .map(|(((&l, &e), &p), &m)| l * (beta + e + gamma * m) - p)
+        .zip(coset_eval_list_left_values.par_iter())
+        .zip(pp.coset_eval_list_positions_left.par_iter())
+        .zip(pp.coset_eval_list_position_mappings.par_iter())
+        .map(|(((&l, &v), &p), &m)| l * (beta + v + gamma * m) - p)
         .collect();
-    domain_coset_l.ifft_in_place(&mut poly_coset_eval_list_ql);
-    let mut poly_coset_coeff_list_ql = poly_coset_eval_list_ql;
+    pp.domain_coset_l.ifft_in_place(&mut coset_eval_list_ql);
+    let mut poly_coset_coeff_list_ql = coset_eval_list_ql;
     divide_by_vanishing_poly_on_coset_in_place::<P::G1>(&pp.domain_l, &mut
         poly_coset_coeff_list_ql)?;
     let coeff_ql = poly_coset_coeff_list_ql;
@@ -85,7 +79,7 @@ pub fn prove<P: Pairing>(
     let mut poly_eval_r = vec![P::ScalarField::zero(); pp.size_right_values];
     let roots_of_unity_r = roots_of_unity::<P>(&pp.domain_r);
     let non_zero_eval_list: Result<Vec<(usize, P::ScalarField)>, Error> = pp.positions_right.par_iter().map(|&i| {
-        let eval = beta + witness.right_elements[i] + gamma * roots_of_unity_r[i];
+        let eval = beta + witness.right_values[i] + gamma * roots_of_unity_r[i];
         let inv = eval.inverse().ok_or(Error::FailedToInverseFieldElement)?;
 
         Ok((i, inv))
@@ -99,22 +93,17 @@ pub fn prove<P: Pairing>(
     let g2_affine_r = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_r).into_affine();
 
     // Construct the quotient polynomial of the right half.
-    let domain_coset_r = pp.domain_r
-        .get_coset(P::ScalarField::GENERATOR)
-        .ok_or(Error::FailedToCreateCosetOfEvaluationDomain)?;
-    let poly_coset_eval_list_r = domain_coset_r.fft(&poly_r);
-    let poly_coset_eval_list_right_elements = domain_coset_r.fft(&witness.poly_right_elements);
-    let poly_coset_eval_list_positions_right = domain_coset_r.fft(&pp.poly_positions_right);
-    let roots_of_unity_coset_r = roots_of_unity::<P>(&domain_coset_r);
-    let mut poly_coset_eval_list_qr: Vec<P::ScalarField> = poly_coset_eval_list_r
+    let coset_eval_list_r = pp.domain_coset_r.fft(&poly_r);
+    let coset_eval_list_right_values = pp.domain_coset_r.fft(&witness.poly_right_values);
+    let mut coset_eval_list_qr: Vec<P::ScalarField> = coset_eval_list_r
         .par_iter()
-        .zip(poly_coset_eval_list_right_elements.par_iter())
-        .zip(poly_coset_eval_list_positions_right.par_iter())
-        .zip(roots_of_unity_coset_r.par_iter())
+        .zip(coset_eval_list_right_values.par_iter())
+        .zip(pp.coset_eval_list_positions_right.par_iter())
+        .zip(pp.roots_of_unity_coset_r.par_iter())
         .map(|(((&r, &e), &p), &c)| r * (beta + e + gamma * c) - p)
         .collect();
-    domain_coset_r.ifft_in_place(&mut poly_coset_eval_list_qr);
-    let mut poly_coset_coeff_list_qr = poly_coset_eval_list_qr;
+    pp.domain_coset_r.ifft_in_place(&mut coset_eval_list_qr);
+    let mut poly_coset_coeff_list_qr = coset_eval_list_qr;
     divide_by_vanishing_poly_on_coset_in_place::<P::G1>(&pp.domain_r, &mut poly_coset_coeff_list_qr)?;
     let coeff_qr = poly_coset_coeff_list_qr;
     let poly_qr = DensePolynomial::from_coefficients_vec(coeff_qr);

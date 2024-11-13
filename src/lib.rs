@@ -10,7 +10,7 @@ pub mod witness;
 pub mod statement;
 mod transcript;
 
-const COMPRESS_MOD: Compress = Compress::Yes;
+const COMPRESS_MOD: Compress = Compress::No;
 
 #[cfg(test)]
 mod tests {
@@ -32,8 +32,8 @@ mod tests {
         mappings.insert(6, 12);
 
         let pp = PublicParameters::<Bn254>::builder()
-            .left_element_size(8)
-            .right_element_size(16)
+            .size_left_values(8)
+            .size_right_values(16)
             .positions_left(&[0, 2, 4, 6])
             .positions_right(&[0, 4, 8, 12])
             .position_mappings(&mappings)

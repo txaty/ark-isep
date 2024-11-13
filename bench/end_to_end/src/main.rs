@@ -18,8 +18,8 @@ fn generate_inputs(num_tx: usize, pow_seg: usize, pow_shared: usize) -> (
     let num_right_values = (1 << pow_shared) * num_tx;
     let curr_time = std::time::Instant::now();
     let pp = PublicParameters::<Bn254>::builder()
-        .left_element_size(num_left_values)
-        .right_element_size(num_right_values)
+        .size_left_values(num_left_values)
+        .size_right_values(num_right_values)
         .positions_left(&(0..num_tx).map(|i| i << pow_seg).collect::<Vec<_>>())
         .positions_right(&(0..num_tx).map(|i| i << pow_shared).collect::<Vec<_>>())
         .position_mappings(&mappings)
@@ -37,12 +37,17 @@ fn generate_inputs(num_tx: usize, pow_seg: usize, pow_shared: usize) -> (
 
     (pp, witness, statement)
 }
+
+const NUM_ITER: usize = 5;
+
 fn main() {
     let (pp, witness, statement) = generate_inputs(1024, 6, 14);
-    let curr_time = std::time::Instant::now();
-    let proof = prove(&pp, &witness, &statement).unwrap();
-    println!("prove time: {:?} ms", curr_time.elapsed().as_millis());
-    let curr_time = std::time::Instant::now();
-    verify(&pp, &statement, &proof).unwrap();
-    println!("verify time: {:?} ms", curr_time.elapsed().as_millis());
+    for _ in 0..NUM_ITER {
+        let curr_time = std::time::Instant::now();
+        let proof = prove(&pp, &witness, &statement).unwrap();
+        println!("prove time: {:?} ms", curr_time.elapsed().as_millis());
+        let curr_time = std::time::Instant::now();
+        verify(&pp, &statement, &proof).unwrap();
+        println!("verify time: {:?} ms", curr_time.elapsed().as_millis());
+    }
 }
