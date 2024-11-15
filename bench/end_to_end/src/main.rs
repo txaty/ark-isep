@@ -39,15 +39,20 @@ fn generate_inputs(num_tx: usize, pow_seg: usize, pow_shared: usize) -> (
 }
 
 const NUM_ITER: usize = 5;
+const SHARED_POW_VEC: [usize; 8] = [9, 10, 11, 12, 13, 14, 15, 16];
+const NUM_TX: usize = 1024;
+const POW_SEG: usize = 6;
 
 fn main() {
-    let (pp, witness, statement) = generate_inputs(1024, 6, 14);
-    for _ in 0..NUM_ITER {
-        let curr_time = std::time::Instant::now();
-        let proof = prove(&pp, &witness, &statement).unwrap();
-        println!("prove time: {:?} ms", curr_time.elapsed().as_millis());
-        let curr_time = std::time::Instant::now();
-        verify(&pp, &statement, &proof).unwrap();
-        println!("verify time: {:?} ms", curr_time.elapsed().as_millis());
+    for &pow_shared in SHARED_POW_VEC.iter() {
+        let (pp, witness, statement) = generate_inputs(NUM_TX, POW_SEG, pow_shared);
+        for _ in 0..NUM_ITER {
+            let curr_time = std::time::Instant::now();
+            let proof = prove(&pp, &witness, &statement).unwrap();
+            println!("prove time: {:?} ms", curr_time.elapsed().as_millis());
+            let curr_time = std::time::Instant::now();
+            verify(&pp, &statement, &proof).unwrap();
+            println!("verify time: {:?} ms", curr_time.elapsed().as_millis());
+        }
     }
 }
