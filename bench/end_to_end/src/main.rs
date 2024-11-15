@@ -45,6 +45,7 @@ const POW_SEG: usize = 6;
 
 fn main() {
     for &pow_shared in SHARED_POW_VEC.iter() {
+        println!("Num TX: {}, Pow Seg: {}, Pow Shared: {}", NUM_TX, POW_SEG, pow_shared);
         let (pp, witness, statement) = generate_inputs(NUM_TX, POW_SEG, pow_shared);
         for _ in 0..NUM_ITER {
             let curr_time = std::time::Instant::now();
