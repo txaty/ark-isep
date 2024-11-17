@@ -40,16 +40,21 @@ pub fn prove<P: Pairing>(
     let subset_values = subset_left_values;
     let coeff_subset_values = pp.sub_domain.ifft(&subset_values);
     let poly_sv = DensePolynomial::from_coefficients_vec(coeff_subset_values);
-    let g1_affine_sv = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_sv).into_affine();
+    let g1_sv = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_sv);
 
 
-    let poly_qlv = witness.poly_left_values.clone() - &poly_sv;
+    let poly_qlv = &witness.poly_left_values - &poly_sv;
     let poly_qlv = divide_by_vanishing_poly_checked::<P>(&pp.sub_domain, &poly_qlv)?;
-    let g1_affine_qlv = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_qlv).into_affine();
+    let g1_qlv = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_qlv);
 
-    let poly_qrv = witness.poly_right_values.clone() - &poly_sv;
+    let poly_qrv = &witness.poly_right_values - &poly_sv;
     let poly_qrv = divide_by_vanishing_poly_checked::<P>(&pp.sub_domain, &poly_qrv)?;
-    let g1_affine_qrv = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_qrv).into_affine();
+    let g1_qrv = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_qrv);
+    
+    let g1_affine_list = P::G1::normalize_batch(&[g1_sv, g1_qlv, g1_qrv]);
+    let g1_affine_sv = g1_affine_list[0];
+    let g1_affine_qlv = g1_affine_list[1];
+    let g1_affine_qrv = g1_affine_list[2];
 
     transcript.append_elements(&[
         (Label::G1Sv, g1_affine_sv),
