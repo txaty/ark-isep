@@ -20,12 +20,15 @@ pub struct Proof<P: Pairing> {
     pub(crate) g1_affine_qr: P::G1Affine,
     pub(crate) batch_proof_at_rand_point: P::G1Affine,
     pub(crate) batch_proof_at_zero: P::G1Affine,
-    pub(crate) l_at_zero: P::ScalarField,
-    pub(crate) r_at_zero: P::ScalarField,
     pub(crate) l_at_delta: P::ScalarField,
     pub(crate) r_at_delta: P::ScalarField,
     pub(crate) lv_at_delta: P::ScalarField,
     pub(crate) rv_at_delta: P::ScalarField,
+    pub(crate) pl_at_delta: P::ScalarField,
+    pub(crate) pr_at_delta: P::ScalarField,
+    pub(crate) pm_at_delta: P::ScalarField,
+    pub(crate) l_at_zero: P::ScalarField,
+    pub(crate) r_at_zero: P::ScalarField,
 }
 
 pub fn prove<P: Pairing>(
@@ -136,8 +139,17 @@ pub fn prove<P: Pairing>(
     // let batch_proof = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_batched).into_affine();
     let batch_proof_at_rand_point = Kzg::<P::G1>::batch_open(
         &pp.g1_affine_srs,
-        &[&poly_l, &poly_r, &poly_ql, &poly_qr, &witness.poly_left_values, &witness
-            .poly_right_values, &pp.poly_position_mappings],
+        &[
+            &poly_l,
+            &poly_r,
+            &poly_ql,
+            &poly_qr,
+            &witness.poly_left_values,
+            &witness.poly_right_values,
+            &pp.poly_positions_left,
+            &pp.poly_positions_right,
+            &pp.poly_position_mappings,
+        ],
         delta,
         epsilon,
     );
@@ -148,6 +160,10 @@ pub fn prove<P: Pairing>(
     let r_at_delta = poly_r.evaluate(&delta);
     let lv_at_delta = witness.poly_left_values.evaluate(&delta);
     let rv_at_delta = witness.poly_right_values.evaluate(&delta);
+    let pl_at_delta = pp.poly_positions_left.evaluate(&delta);
+    let pr_at_delta = pp.poly_positions_right.evaluate(&delta);
+    let pm_at_delta = pp.poly_position_mappings.evaluate(&delta);
+    
     let fr_zero = P::ScalarField::zero();
     let l_at_zero = poly_l.evaluate(&fr_zero);
     let r_at_zero = poly_r.evaluate(&fr_zero);
@@ -158,6 +174,9 @@ pub fn prove<P: Pairing>(
             (Label::FrRAtDelta, r_at_delta),
             (Label::FrLvAtDelta, lv_at_delta),
             (Label::FrRvAtDelta, rv_at_delta),
+            (Label::FrPlAtDelta, pl_at_delta),
+            (Label::FrPrAtDelta, pr_at_delta),
+            (Label::FrPmAtDelta, pm_at_delta),
             (Label::FrLAtZero, l_at_zero),
             (Label::FrRAtZero, r_at_zero),
         ]
@@ -186,5 +205,8 @@ pub fn prove<P: Pairing>(
         r_at_delta,
         lv_at_delta,
         rv_at_delta,
+        pl_at_delta,
+        pr_at_delta,
+        pm_at_delta,
     })
 }

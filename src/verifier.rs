@@ -5,7 +5,6 @@ use crate::statement::Statement;
 use crate::transcript::{Label, Transcript};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
-use ark_poly::Polynomial;
 use ark_std::{One, Zero};
 use std::ops::Mul;
 
@@ -47,6 +46,9 @@ pub fn verify<P: Pairing>(
             (Label::FrRAtDelta, proof.r_at_delta),
             (Label::FrLvAtDelta, proof.lv_at_delta),
             (Label::FrRvAtDelta, proof.rv_at_delta),
+            (Label::FrPlAtDelta, proof.pl_at_delta),
+            (Label::FrPrAtDelta, proof.pr_at_delta),
+            (Label::FrPmAtDelta, proof.pm_at_delta),
             (Label::FrLAtZero, proof.l_at_zero),
             (Label::FrRAtZero, proof.r_at_zero),
         ]
@@ -58,19 +60,16 @@ pub fn verify<P: Pairing>(
     let fr_one = P::ScalarField::one();
     let fr_zl_at_delta = delta.pow(&[pp.size_left_values as u64]) - fr_one;
     let fr_inv_zl_at_delta = fr_zl_at_delta.inverse().ok_or(Error::FailedToInverseFieldElement)?;
-    let fr_pl_at_delta = pp.poly_positions_left.evaluate(&delta);
-    let fr_pm_at_delta = pp.poly_position_mappings.evaluate(&delta);
-    let fr_ql_at_delta = beta + proof.lv_at_delta + gamma * fr_pm_at_delta;
+    let fr_ql_at_delta = beta + proof.lv_at_delta + gamma * proof.pm_at_delta;
     let fr_ql_at_delta = fr_ql_at_delta * proof.l_at_delta;
-    let fr_ql_at_delta = fr_ql_at_delta - fr_pl_at_delta;
+    let fr_ql_at_delta = fr_ql_at_delta - proof.pl_at_delta;
     let fr_ql_at_delta = fr_ql_at_delta * fr_inv_zl_at_delta;
 
     let fr_zr_at_delta = delta.pow(&[pp.size_right_values as u64]) - fr_one;
     let fr_inv_zr_at_delta = fr_zr_at_delta.inverse().ok_or(Error::FailedToInverseFieldElement)?;
-    let fr_pr_at_delta = pp.poly_positions_right.evaluate(&delta);
     let fr_qr_at_delta = beta + proof.rv_at_delta + gamma * delta;
     let fr_qr_at_delta = fr_qr_at_delta * proof.r_at_delta;
-    let fr_qr_at_delta = fr_qr_at_delta - fr_pr_at_delta;
+    let fr_qr_at_delta = fr_qr_at_delta - proof.pr_at_delta;
     let fr_qr_at_delta = fr_qr_at_delta * fr_inv_zr_at_delta;
 
     let g1_list = vec![
@@ -80,6 +79,8 @@ pub fn verify<P: Pairing>(
         proof.g1_affine_qr,
         statement.g1_affine_left_values,
         statement.g1_affine_right_values,
+        pp.g1_affine_positions_left,
+        pp.g1_affine_positions_right,
         pp.g1_affine_position_mappings,
     ];
 
@@ -90,7 +91,9 @@ pub fn verify<P: Pairing>(
         fr_qr_at_delta,
         proof.lv_at_delta,
         proof.rv_at_delta,
-        fr_pm_at_delta,
+        proof.pl_at_delta,
+        proof.pr_at_delta,
+        proof.pm_at_delta,
     ];
 
     let mut g1_batched = P::G1::zero();

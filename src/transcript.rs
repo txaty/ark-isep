@@ -31,6 +31,9 @@ pub(crate) enum Label {
     FrRAtDelta,
     FrLvAtDelta,
     FrRvAtDelta,
+    FrPlAtDelta,
+    FrPrAtDelta,
+    FrPmAtDelta,
 }
 
 impl Label {
@@ -55,6 +58,9 @@ impl Label {
             Label::FrRAtDelta => b"fr_r_at_delta",
             Label::FrLvAtDelta => b"fr_ql_at_delta",
             Label::FrRvAtDelta => b"fr_qr_at_delta",
+            Label::FrPlAtDelta => b"fr_pl_at_delta",
+            Label::FrPrAtDelta => b"fr_pr_at_delta",
+            Label::FrPmAtDelta => b"fr_pm_at_delta",
         }
     }
 }
