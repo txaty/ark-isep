@@ -4,7 +4,7 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::{FftField, One};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
 use ark_std::rand::Rng;
-use ark_std::UniformRand;
+use ark_std::{UniformRand, Zero};
 use rayon::prelude::*;
 use std::marker::PhantomData;
 use std::ops::Mul;
@@ -51,6 +51,43 @@ impl<C: CurveGroup> Kzg<C> {
         let proof = Self::commit(affine_srs, &q);
 
         (poly.evaluate(&challenge), proof.into())
+    }
+
+    pub fn batch_open(
+        affine_srs: &[C::Affine],
+        poly_list: &[&DensePolynomial<C::ScalarField>],
+        fr_opening: C::ScalarField,
+        fr_separation: C::ScalarField,
+    ) -> C::Affine {
+        let num_polys = poly_list.len();
+        let powers_of_sep = powers_of_scalars::<C::ScalarField>(fr_separation, num_polys);
+
+        let mut batched = poly_list[0].clone();
+        let rest_batched: DensePolynomial<C::ScalarField> = poly_list[1..]
+            .par_iter()
+            .zip(powers_of_sep.par_iter().skip(1))
+            .map(|(&p_i, &fr_sep_pow_i)| {
+                p_i * fr_sep_pow_i // Multiply each polynomial by its
+                // corresponding power of `fr_separation`
+            })
+            .reduce(
+                || DensePolynomial::from_coefficients_slice(&[C::ScalarField::zero()]),
+                |a, b| a + b,
+            );
+        batched += &rest_batched;
+
+        let q = &batched
+            / &DensePolynomial::from_coefficients_slice(&[-fr_opening, C::ScalarField::one()]);
+
+        if affine_srs.len() - 1 < q.degree() {
+            panic!(
+                "Batch open g1: SRS size to small! Can't commit to polynomial of degree {} with srs of size {}",
+                q.degree(),
+                affine_srs.len()
+            );
+        }
+
+        Self::commit(affine_srs, &q).into()
     }
 }
 

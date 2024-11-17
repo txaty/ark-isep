@@ -38,7 +38,7 @@ mod tests {
             .positions_right(&[0, 4, 8, 12])
             .position_mappings(&mappings)
             .build(rng).unwrap();
-        
+
         // Correct verification.
         let left_witness_values = (0..8).map(|_| Fr::rand(rng)).collect::<Vec<_>>();
         let mut right_witness_values = (0..16).map(|_| Fr::rand(rng)).collect::<Vec<_>>();
@@ -52,15 +52,15 @@ mod tests {
 
         let proof = prove::<Bn254>(&pp, &witness, &statement).unwrap();
         verify::<Bn254>(&pp, &statement, &proof).unwrap();
-        
+
         // Wrong common witness value.
         let mut left_witness_values = left_witness_values;
         left_witness_values[4] = Fr::from(42u64);
         right_witness_values[8] = Fr::from(12u64);
-        
+
         let witness = Witness::new(&pp, &left_witness_values, &right_witness_values).unwrap();
         let statement = witness.generate_statement(&pp).unwrap();
-        
+
         let proof = prove::<Bn254>(&pp, &witness, &statement).unwrap();
         assert!(verify::<Bn254>(&pp, &statement, &proof).is_err());
     }
