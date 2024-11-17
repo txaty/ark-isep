@@ -20,23 +20,15 @@ mod tests {
     use crate::witness::Witness;
     use ark_bn254::{Bn254, Fr};
     use ark_std::{test_rng, UniformRand};
-    use std::collections::BTreeMap;
 
     #[test]
     fn end_to_end() {
         let rng = &mut test_rng();
-        let mut mappings = BTreeMap::new();
-        mappings.insert(0, 0);
-        mappings.insert(2, 4);
-        mappings.insert(4, 8);
-        mappings.insert(6, 12);
 
         let pp = PublicParameters::<Bn254>::builder()
             .size_left_values(8)
             .size_right_values(16)
-            .positions_left(&[0, 2, 4, 6])
-            .positions_right(&[0, 4, 8, 12])
-            .position_mappings(&mappings)
+            .size_positions(4)
             .build(rng).unwrap();
 
         // Correct verification.
@@ -61,7 +53,6 @@ mod tests {
         let witness = Witness::new(&pp, &left_witness_values, &right_witness_values).unwrap();
         let statement = witness.generate_statement(&pp).unwrap();
 
-        let proof = prove::<Bn254>(&pp, &witness, &statement).unwrap();
-        assert!(verify::<Bn254>(&pp, &statement, &proof).is_err());
+        assert!(prove::<Bn254>(&pp, &witness, &statement).is_err());
     }
 }

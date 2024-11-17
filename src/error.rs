@@ -3,6 +3,8 @@ pub enum Error {
     MissingParameter(&'static str),
     InvalidEvaluationDomainSize(usize),
     InputShouldBePowerOfTwo(usize),
+    InvalidSegmentSize(usize),
+    InvalidSizesOfPositions(usize, usize),
     InputIsTooLarge(usize),
     FailedToCreateEvaluationDomain,
     FailedToInverseFieldElement,
@@ -14,9 +16,12 @@ pub enum Error {
     FailedToSerializeElement,
     RemainderAfterDivisionIsNonZero,
     FailedToCreateCosetOfEvaluationDomain,
+    
+    FailedToGenerateSubdomain,
 
-    Pairing1Failed,
-    Pairing2Failed,
-    // Pairing3Failed,
-    EqualityCheckFailed,
+    ValuesDoNotMatch,
+    
+    Check1Failed,
+    Check2Failed,
+    PairingFailed,
 }

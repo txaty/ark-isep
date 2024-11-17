@@ -20,9 +20,7 @@ fn generate_inputs(num_tx: usize, pow_seg: usize, pow_shared: usize) -> (
     let pp = PublicParameters::<Bn254>::builder()
         .size_left_values(num_left_values)
         .size_right_values(num_right_values)
-        .positions_left(&(0..num_tx).map(|i| i << pow_seg).collect::<Vec<_>>())
-        .positions_right(&(0..num_tx).map(|i| i << pow_shared).collect::<Vec<_>>())
-        .position_mappings(&mappings)
+        .size_positions(num_tx)
         .build(rng).unwrap();
     println!("setup time: {:?} ms", curr_time.elapsed().as_millis());
 
@@ -39,7 +37,7 @@ fn generate_inputs(num_tx: usize, pow_seg: usize, pow_shared: usize) -> (
 }
 
 const NUM_ITER: usize = 5;
-const SHARED_POW_VEC: [usize; 8] = [9, 10, 11, 12, 13, 14, 15, 16];
+const SHARED_POW_VEC: [usize; 11] = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 const NUM_TX: usize = 1024;
 const POW_SEG: usize = 6;
 

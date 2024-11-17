@@ -1,10 +1,9 @@
 use crate::error::Error;
 use ark_ec::pairing::Pairing;
-use ark_ec::CurveGroup;
 use ark_ff::{FftField, Field};
+use ark_poly::univariate::DensePolynomial;
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
-use rayon::iter::IntoParallelRefMutIterator;
-use rayon::prelude::*;
+use ark_std::{One, Zero};
 
 pub(crate) fn create_domain_with_generator<F: FftField>(
     group_gen: F,
@@ -44,32 +43,78 @@ pub(crate) fn create_domain_with_generator<F: FftField>(
     })
 }
 
-// pub(crate) fn vanishing_poly_commitment_affine<C: CurveGroup>(
-//     affine_srs: &[C::Affine],
-//     domain: &Radix2EvaluationDomain<C::ScalarField>,
-// ) -> C::Affine {
-//     let vanishing_poly: DensePolynomial<C::ScalarField> = domain.vanishing_polynomial().into();
-//
-//     Kzg::<C>::commit(&affine_srs, &vanishing_poly).into_affine()
-// }
-
 pub(crate) fn roots_of_unity<P: Pairing>(
     domain: &Radix2EvaluationDomain<P::ScalarField>,
 ) -> Vec<P::ScalarField> {
     domain.elements().collect()
 }
 
-pub fn divide_by_vanishing_poly_on_coset_in_place<C: CurveGroup>(
-    domain: &Radix2EvaluationDomain<C::ScalarField>,
-    evaluations: &mut [C::ScalarField],
-) -> Result<(), Error> {
-    let vanishing_poly_eval = domain.evaluate_vanishing_polynomial(C::ScalarField::GENERATOR);
-    let inv_vanishing_poly_eval = vanishing_poly_eval
+
+
+pub(crate) fn create_sub_domain<P: Pairing>(
+    original_domain: &Radix2EvaluationDomain<P::ScalarField>,
+    order: usize,
+    segment_size: usize,
+) -> Result<Radix2EvaluationDomain<P::ScalarField>, Error> {
+    if segment_size == 0 {
+        return Err(Error::InvalidSegmentSize(segment_size));
+    }
+    if segment_size == 1 {
+        return Ok(original_domain.clone());
+    }
+    if !order.is_power_of_two() {
+        return Err(Error::InvalidEvaluationDomainSize(order));
+    }
+    let original_order = original_domain.size();
+    if segment_size > original_order {
+        return Err(Error::InvalidSegmentSize(segment_size));
+    }
+    if segment_size == original_order {
+        let domain_1 = Radix2EvaluationDomain::<P::ScalarField>::new(1)
+            .ok_or(Error::FailedToCreateEvaluationDomain)?;
+        return Ok(domain_1);
+    }
+
+    let size: u64 = order as u64;
+    let log_size_of_group = order.trailing_zeros();
+    if log_size_of_group > <P::ScalarField as FftField>::TWO_ADICITY {
+        return Err(Error::InvalidEvaluationDomainSize(order));
+    }
+
+    let roots_of_unity_larger_domain = roots_of_unity::<P>(&original_domain);
+    let group_gen = roots_of_unity_larger_domain[segment_size];
+    let size_as_field_element = P::ScalarField::from(size);
+    let size_inv = size_as_field_element
         .inverse()
         .ok_or(Error::FailedToInverseFieldElement)?;
-    evaluations
-        .par_iter_mut()
-        .for_each(|eval| *eval *= &inv_vanishing_poly_eval);
 
-    Ok(())
+    let group_gen_inv = group_gen
+        .inverse()
+        .ok_or(Error::FailedToInverseFieldElement)?;
+
+    Ok(Radix2EvaluationDomain {
+        size,
+        log_size_of_group,
+        size_as_field_element,
+        size_inv,
+        group_gen,
+        group_gen_inv,
+        offset: P::ScalarField::one(),
+        offset_inv: P::ScalarField::one(),
+        offset_pow_size: P::ScalarField::one(),
+    })
+}
+
+pub(crate) fn divide_by_vanishing_poly_checked<P: Pairing>(
+    domain: &Radix2EvaluationDomain<P::ScalarField>,
+    poly: &DensePolynomial<P::ScalarField>,
+) -> Result<DensePolynomial<P::ScalarField>, Error> {
+    let (quotient, remainder) = poly
+        .divide_by_vanishing_poly(*domain);
+
+    if !remainder.is_zero() {
+        return Err(Error::RemainderAfterDivisionIsNonZero);
+    }
+
+    Ok(quotient)
 }
