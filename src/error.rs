@@ -17,6 +17,6 @@ pub enum Error {
 
     Pairing1Failed,
     Pairing2Failed,
-    Pairing3Failed,
+    // Pairing3Failed,
     EqualityCheckFailed,
 }

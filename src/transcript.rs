@@ -11,18 +11,27 @@ pub(crate) enum Label {
     ChallengeBeta,
     ChallengeGamma,
     ChallengeDelta,
+    ChallengeEpsilon,
+    ChallengeZeta,
 
     PublicParameters,
     Statement,
 
-    G2L,
-    G2R,
-    
+    G1L,
+    G1R,
     G1Ql,
     G1Qr,
-    
+    G1BatchProofAtRandPoint,
+
     FrLAtZero,
     FrRAtZero,
+    FrLAtDelta,
+    FrRAtDelta,
+    FrLvAtDelta,
+    FrRvAtDelta,
+    FrPlAtDelta,
+    FrPrAtDelta,
+    FrPmAtDelta,
 }
 
 impl Label {
@@ -31,14 +40,24 @@ impl Label {
             Label::ChallengeBeta => b"beta",
             Label::ChallengeGamma => b"gamma",
             Label::ChallengeDelta => b"delta",
+            Label::ChallengeEpsilon => b"epsilon",
+            Label::ChallengeZeta => b"zeta",
             Label::PublicParameters => b"common_inputs",
             Label::Statement => b"statement",
-            Label::G2L => b"g2_l",
-            Label::G2R => b"g2_r",
+            Label::G1L => b"g1_l",
+            Label::G1R => b"g1_r",
             Label::G1Ql => b"g1_ql",
             Label::G1Qr => b"g1_qr",
+            Label::G1BatchProofAtRandPoint => b"g1_batch_proof_at_rand_point",
             Label::FrLAtZero => b"fr_l_at_zero",
             Label::FrRAtZero => b"fr_r_at_zero",
+            Label::FrLAtDelta => b"fr_l_at_delta",
+            Label::FrRAtDelta => b"fr_r_at_delta",
+            Label::FrLvAtDelta => b"fr_ql_at_delta",
+            Label::FrRvAtDelta => b"fr_qr_at_delta",
+            Label::FrPlAtDelta => b"fr_pl_at_delta",
+            Label::FrPrAtDelta => b"fr_pr_at_delta",
+            Label::FrPmAtDelta => b"fr_pm_at_delta",
         }
     }
 }

@@ -14,11 +14,19 @@ use ark_std::Zero;
 use rayon::prelude::*;
 
 pub struct Proof<P: Pairing> {
-    pub(crate) g2_affine_l: P::G2Affine,
-    pub(crate) g2_affine_r: P::G2Affine,
+    pub(crate) g1_affine_l: P::G1Affine,
+    pub(crate) g1_affine_r: P::G1Affine,
     pub(crate) g1_affine_ql: P::G1Affine,
     pub(crate) g1_affine_qr: P::G1Affine,
-    pub(crate) batch_proof: P::G2Affine,
+    pub(crate) batch_proof_at_rand_point: P::G1Affine,
+    pub(crate) batch_proof_at_zero: P::G1Affine,
+    pub(crate) l_at_delta: P::ScalarField,
+    pub(crate) r_at_delta: P::ScalarField,
+    pub(crate) lv_at_delta: P::ScalarField,
+    pub(crate) rv_at_delta: P::ScalarField,
+    pub(crate) pl_at_delta: P::ScalarField,
+    pub(crate) pr_at_delta: P::ScalarField,
+    pub(crate) pm_at_delta: P::ScalarField,
     pub(crate) l_at_zero: P::ScalarField,
     pub(crate) r_at_zero: P::ScalarField,
 }
@@ -55,7 +63,7 @@ pub fn prove<P: Pairing>(
     });
     let poly_coeff_l = pp.domain_l.ifft(&poly_eval_l);
     let poly_l = DensePolynomial::from_coefficients_vec(poly_coeff_l);
-    let g2_affine_l = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_l).into_affine();
+    let g1_affine_l = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_l).into_affine();
 
     // Construct the quotient polynomial of the left half.
     let coset_eval_list_l = pp.domain_coset_l.fft(&poly_l);
@@ -90,7 +98,7 @@ pub fn prove<P: Pairing>(
     });
     let poly_coeff_r = pp.domain_r.ifft(&poly_eval_r);
     let poly_r = DensePolynomial::from_coefficients_vec(poly_coeff_r);
-    let g2_affine_r = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_r).into_affine();
+    let g1_affine_r = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_r).into_affine();
 
     // Construct the quotient polynomial of the right half.
     let coset_eval_list_r = pp.domain_coset_r.fft(&poly_r);
@@ -111,41 +119,87 @@ pub fn prove<P: Pairing>(
 
     transcript.append_elements(
         &[
-            (Label::G2L, g2_affine_l),
-            (Label::G2R, g2_affine_r),
-        ]
-    )?;
-    transcript.append_elements(
-        &[
+            (Label::G1L, g1_affine_l),
+            (Label::G1R, g1_affine_r),
             (Label::G1Ql, g1_affine_ql),
             (Label::G1Qr, g1_affine_qr),
         ]
     )?;
 
+    // Sample random delta, phi.
+    let delta = transcript.squeeze_challenge(Label::ChallengeDelta)?;
+    let epsilon = transcript.squeeze_challenge(Label::ChallengeEpsilon)?;
+
+    let batch_proof_at_rand_point = Kzg::<P::G1>::batch_open(
+        &pp.g1_affine_srs,
+        &[
+            &poly_l,
+            &poly_r,
+            &poly_ql,
+            &poly_qr,
+            &witness.poly_left_values,
+            &witness.poly_right_values,
+            &pp.poly_positions_left,
+            &pp.poly_positions_right,
+            &pp.poly_position_mappings,
+        ],
+        delta,
+        epsilon,
+    );
+
+    transcript.append_element(Label::G1BatchProofAtRandPoint, &batch_proof_at_rand_point)?;
+
+    let l_at_delta = poly_l.evaluate(&delta);
+    let r_at_delta = poly_r.evaluate(&delta);
+    let lv_at_delta = witness.poly_left_values.evaluate(&delta);
+    let rv_at_delta = witness.poly_right_values.evaluate(&delta);
+    let pl_at_delta = pp.poly_positions_left.evaluate(&delta);
+    let pr_at_delta = pp.poly_positions_right.evaluate(&delta);
+    let pm_at_delta = pp.poly_position_mappings.evaluate(&delta);
+    
     let fr_zero = P::ScalarField::zero();
     let l_at_zero = poly_l.evaluate(&fr_zero);
     let r_at_zero = poly_r.evaluate(&fr_zero);
 
     transcript.append_elements(
         &[
+            (Label::FrLAtDelta, l_at_delta),
+            (Label::FrRAtDelta, r_at_delta),
+            (Label::FrLvAtDelta, lv_at_delta),
+            (Label::FrRvAtDelta, rv_at_delta),
+            (Label::FrPlAtDelta, pl_at_delta),
+            (Label::FrPrAtDelta, pr_at_delta),
+            (Label::FrPmAtDelta, pm_at_delta),
             (Label::FrLAtZero, l_at_zero),
             (Label::FrRAtZero, r_at_zero),
         ]
     )?;
-    // Sample random delta.
-    let delta = transcript.squeeze_challenge(Label::ChallengeDelta)?;
 
-    let mut poly_batched = poly_l + &poly_r * delta;
-    poly_batched.coeffs.drain(0..1);
-    let batch_proof = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_batched).into_affine();
+    let zeta = transcript.squeeze_challenge(Label::ChallengeZeta)?;
+
+    let batch_proof_at_zero = Kzg::<P::G1>::batch_open(
+        &pp.g1_affine_srs,
+        &[&poly_l, &poly_r],
+        fr_zero,
+        zeta,
+    );
+
 
     Ok(Proof {
-        g2_affine_l,
-        g2_affine_r,
+        g1_affine_l,
+        g1_affine_r,
         g1_affine_ql,
         g1_affine_qr,
-        batch_proof,
+        batch_proof_at_rand_point,
+        batch_proof_at_zero,
         l_at_zero,
         r_at_zero,
+        l_at_delta,
+        r_at_delta,
+        lv_at_delta,
+        rv_at_delta,
+        pl_at_delta,
+        pr_at_delta,
+        pm_at_delta,
     })
 }
