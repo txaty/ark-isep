@@ -1,4 +1,3 @@
-use crate::domain::divide_by_vanishing_poly_checked;
 use crate::error::Error;
 use crate::kzg::Kzg;
 use crate::public_parameters::PublicParameters;
@@ -9,6 +8,7 @@ use ark_ec::pairing::Pairing;
 use ark_ec::CurveGroup;
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, Polynomial};
+use rayon::prelude::*;
 
 pub struct Proof<P: Pairing> {
     pub(crate) g1_affine_sv: P::G1Affine,
@@ -44,13 +44,21 @@ pub fn prove<P: Pairing>(
 
 
     let poly_qlv = &witness.poly_left_values - &poly_sv;
-    let poly_qlv = divide_by_vanishing_poly_checked::<P>(&pp.sub_domain, &poly_qlv)?;
+    let coset_eval_qlv = pp.domain_coset_l.fft(&poly_qlv.coeffs);
+    let coset_eval_qlv = coset_eval_qlv.par_iter().zip(&pp.inv_vanishing_poly_sub_at_coset_l).map
+    (|(&a, b)| a * b).collect::<Vec<_>>();
+    let coeff_qlv = pp.domain_coset_l.ifft(&coset_eval_qlv);
+    let poly_qlv = DensePolynomial::from_coefficients_vec(coeff_qlv);
     let g1_qlv = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_qlv);
 
     let poly_qrv = &witness.poly_right_values - &poly_sv;
-    let poly_qrv = divide_by_vanishing_poly_checked::<P>(&pp.sub_domain, &poly_qrv)?;
+    let coset_eval_qrv = pp.domain_coset_r.fft(&poly_qrv.coeffs);
+    let coset_eval_qrv = coset_eval_qrv.par_iter().zip(&pp.inv_vanishing_poly_sub_at_coset_r).map
+    (|(&a, b)| a * b).collect::<Vec<_>>();
+    let coeff_qrv = pp.domain_coset_r.ifft(&coset_eval_qrv);
+    let poly_qrv = DensePolynomial::from_coefficients_vec(coeff_qrv);
     let g1_qrv = Kzg::<P::G1>::commit(&pp.g1_affine_srs, &poly_qrv);
-    
+
     let g1_affine_list = P::G1::normalize_batch(&[g1_sv, g1_qlv, g1_qrv]);
     let g1_affine_sv = g1_affine_list[0];
     let g1_affine_qlv = g1_affine_list[1];
@@ -71,6 +79,7 @@ pub fn prove<P: Pairing>(
     let qrv_at_beta = poly_qrv.evaluate(&beta);
     let lv_at_beta = witness.poly_left_values.evaluate(&beta);
     let rv_at_beta = witness.poly_right_values.evaluate(&beta);
+
 
     let batch_proof = Kzg::<P::G1>::batch_open(
         &pp.g1_affine_srs,

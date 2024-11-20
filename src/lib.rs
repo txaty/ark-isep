@@ -19,7 +19,11 @@ mod tests {
     use crate::verifier::verify;
     use crate::witness::Witness;
     use ark_bn254::{Bn254, Fr};
+    use ark_ec::pairing::Pairing;
+    use ark_ff::FftField;
+    use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
     use ark_std::{test_rng, UniformRand};
+    use crate::domain::create_sub_domain;
 
     #[test]
     fn end_to_end() {
@@ -53,6 +57,20 @@ mod tests {
         let witness = Witness::new(&pp, &left_witness_values, &right_witness_values).unwrap();
         let statement = witness.generate_statement(&pp).unwrap();
 
-        assert!(prove::<Bn254>(&pp, &witness, &statement).is_err());
+        let proof = prove::<Bn254>(&pp, &witness, &statement).unwrap();
+        assert!(verify::<Bn254>(&pp, &statement, &proof).is_err());
+    }
+    
+    #[test]
+    fn test_coset() {
+        let domain_1 = Radix2EvaluationDomain::<Fr>::new(16).unwrap();
+        let domain_2 = create_sub_domain::<Bn254>(&domain_1, 4, 4).unwrap();
+        println!("domain_1 elements: {:?}", domain_1.elements().collect::<Vec<_>>());
+        println!("domain_2 elements: {:?}", domain_2.elements().collect::<Vec<_>>());
+        
+        let domain_1_coset = domain_1.get_coset(Fr::GENERATOR).unwrap();
+        let domain_2_coset = domain_2.get_coset(Fr::GENERATOR).unwrap();
+        println!("domain_1 coset: {:?}", domain_1_coset.elements().collect::<Vec<_>>());
+        println!("domain_2 coset: {:?}", domain_2_coset.elements().collect::<Vec<_>>());
     }
 }

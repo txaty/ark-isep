@@ -3,12 +3,11 @@ use crate::error::Error;
 use crate::kzg::unsafe_setup_from_tau;
 use crate::COMPRESS_MOD;
 use ark_ec::pairing::Pairing;
-use ark_ff::FftField;
-use ark_poly::univariate::DensePolynomial;
+use ark_ff::{FftField, Field};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::Rng;
-use ark_std::UniformRand;
+use ark_std::{One, UniformRand};
 use blake2::{Blake2b512, Digest};
 use std::cmp::{max, min};
 
@@ -23,11 +22,12 @@ pub struct PublicParameters<P: Pairing> {
 
     pub domain_l: Radix2EvaluationDomain<P::ScalarField>,
     pub domain_r: Radix2EvaluationDomain<P::ScalarField>,
+    pub domain_coset_l: Radix2EvaluationDomain<P::ScalarField>,
+    pub domain_coset_r: Radix2EvaluationDomain<P::ScalarField>,
     pub sub_domain: Radix2EvaluationDomain<P::ScalarField>,
-
-    pub sub_domain_coset: Radix2EvaluationDomain<P::ScalarField>,
-
-    pub vanishing_poly_sub: DensePolynomial<P::ScalarField>,
+    
+    pub inv_vanishing_poly_sub_at_coset_l: Vec<P::ScalarField>,
+    pub inv_vanishing_poly_sub_at_coset_r: Vec<P::ScalarField>,
 
     pub(crate) hash_representation: Vec<u8>,
 }
@@ -103,6 +103,11 @@ impl<P: Pairing> PublicParametersBuilder<P> {
 
         let domain_l = create_domain::<P>(self.domain_generator_l, size_left_values)?;
         let domain_r = create_domain::<P>(self.domain_generator_r, size_right_values)?;
+        
+        let domain_coset_l = domain_l.get_coset(P::ScalarField::GENERATOR)
+            .ok_or(Error::FailedToCreateCosetOfEvaluationDomain)?;
+        let domain_coset_r = domain_r.get_coset(P::ScalarField::GENERATOR)
+            .ok_or(Error::FailedToCreateCosetOfEvaluationDomain)?;
 
         let sub_domain_l = create_sub_domain::<P>(
             &domain_l,
@@ -128,10 +133,25 @@ impl<P: Pairing> PublicParametersBuilder<P> {
         
         let sub_domain_coset = sub_domain.get_coset(P::ScalarField::GENERATOR)
             .ok_or(Error::FailedToCreateCosetOfEvaluationDomain)?;
+        
+        let fr_one = P::ScalarField::one();
+        let domain_coset_l_elements = domain_coset_l.elements().collect::<Vec<_>>();
+        let inv_vanishing_poly_sub_at_coset_l = domain_coset_l_elements.iter().map(|&z| {
+            let val = z.pow(&[size_positions as u64]) - fr_one;
+            let inv = val.inverse().ok_or(Error::FailedToInverseFieldElement)?;
+            
+            Ok(inv)
+        }).collect::<Result<Vec<_>, Error>>()?;
+        
+        let domain_coset_r_elements = domain_coset_r.elements().collect::<Vec<_>>();
+        let inv_vanishing_poly_sub_at_coset_r = domain_coset_r_elements.iter().map(|&z| {
+            let val = z.pow(&[size_positions as u64]) - fr_one;
+            let inv = val.inverse().ok_or(Error::FailedToInverseFieldElement)?;
+            
+            Ok(inv)
+        }).collect::<Result<Vec<_>, Error>>()?;
 
-        let vanishing_poly_sub: DensePolynomial<P::ScalarField> = sub_domain.vanishing_polynomial()
-            .into();
-
+        
 
         // Construct Hash Representation.
         let mut blake2b_hasher = Blake2b512::new();
@@ -165,9 +185,11 @@ impl<P: Pairing> PublicParametersBuilder<P> {
             g2_affine_srs,
             domain_l,
             domain_r,
+            domain_coset_l,
+            domain_coset_r,
             sub_domain,
-            sub_domain_coset,
-            vanishing_poly_sub,
+            inv_vanishing_poly_sub_at_coset_l,
+            inv_vanishing_poly_sub_at_coset_r,
             hash_representation,
         })
     }

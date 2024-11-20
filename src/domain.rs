@@ -1,9 +1,8 @@
 use crate::error::Error;
 use ark_ec::pairing::Pairing;
 use ark_ff::{FftField, Field};
-use ark_poly::univariate::DensePolynomial;
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
-use ark_std::{One, Zero};
+use ark_std::One;
 
 pub(crate) fn create_domain_with_generator<F: FftField>(
     group_gen: F,
@@ -103,18 +102,4 @@ pub(crate) fn create_sub_domain<P: Pairing>(
         offset_inv: P::ScalarField::one(),
         offset_pow_size: P::ScalarField::one(),
     })
-}
-
-pub(crate) fn divide_by_vanishing_poly_checked<P: Pairing>(
-    domain: &Radix2EvaluationDomain<P::ScalarField>,
-    poly: &DensePolynomial<P::ScalarField>,
-) -> Result<DensePolynomial<P::ScalarField>, Error> {
-    let (quotient, remainder) = poly
-        .divide_by_vanishing_poly(*domain);
-
-    if !remainder.is_zero() {
-        return Err(Error::RemainderAfterDivisionIsNonZero);
-    }
-
-    Ok(quotient)
 }
