@@ -44,14 +44,18 @@ pub(crate) fn create_domain_with_generator<F: FftField>(
     })
 }
 
-// pub(crate) fn vanishing_poly_commitment_affine<C: CurveGroup>(
-//     affine_srs: &[C::Affine],
-//     domain: &Radix2EvaluationDomain<C::ScalarField>,
-// ) -> C::Affine {
-//     let vanishing_poly: DensePolynomial<C::ScalarField> = domain.vanishing_polynomial().into();
-//
-//     Kzg::<C>::commit(&affine_srs, &vanishing_poly).into_affine()
-// }
+pub(crate) fn create_domain<P: Pairing>(
+    domain_generator: Option<P::ScalarField>,
+    domain_size: usize,
+) -> Result<Radix2EvaluationDomain<P::ScalarField>, Error> {
+    let domain = domain_generator
+        .map_or_else(
+            || Radix2EvaluationDomain::<P::ScalarField>::new(domain_size).ok_or(Error::FailedToCreateEvaluationDomain),
+            |generator| create_domain_with_generator::<P::ScalarField>(generator, domain_size),
+        )?;
+
+    Ok(domain)
+}
 
 pub(crate) fn roots_of_unity<P: Pairing>(
     domain: &Radix2EvaluationDomain<P::ScalarField>,

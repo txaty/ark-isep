@@ -119,12 +119,8 @@ pub fn prove<P: Pairing>(
 
     transcript.append_elements(
         &[
-            (Label::G2L, g1_affine_l),
-            (Label::G2R, g1_affine_r),
-        ]
-    )?;
-    transcript.append_elements(
-        &[
+            (Label::G1L, g1_affine_l),
+            (Label::G1R, g1_affine_r),
             (Label::G1Ql, g1_affine_ql),
             (Label::G1Qr, g1_affine_qr),
         ]
@@ -134,9 +130,6 @@ pub fn prove<P: Pairing>(
     let delta = transcript.squeeze_challenge(Label::ChallengeDelta)?;
     let epsilon = transcript.squeeze_challenge(Label::ChallengeEpsilon)?;
 
-    // let mut poly_batched = poly_l + &poly_r * delta;
-    // poly_batched.coeffs.drain(0..1);
-    // let batch_proof = Kzg::<P::G2>::commit(&pp.g2_affine_srs, &poly_batched).into_affine();
     let batch_proof_at_rand_point = Kzg::<P::G1>::batch_open(
         &pp.g1_affine_srs,
         &[

@@ -13,15 +13,17 @@ fn generate_inputs(num_tx: usize, pow_seg: usize, pow_shared: usize) -> (
     Statement<Bn254>,
 ) {
     let rng = &mut test_rng();
-    let mappings = (0..num_tx).map(|i| (i << pow_seg, i << pow_shared)).collect::<BTreeMap<_, _>>();
+    let mut mappings = BTreeMap::new();
+    for i in 0..num_tx {
+        mappings.insert(i << pow_seg, i << pow_shared);
+        mappings.insert((i << pow_seg)+1, (i << pow_shared)+1);
+    }
     let num_left_values = (1 << pow_seg) * num_tx;
     let num_right_values = (1 << pow_shared) * num_tx;
     let curr_time = std::time::Instant::now();
     let pp = PublicParameters::<Bn254>::builder()
         .size_left_values(num_left_values)
         .size_right_values(num_right_values)
-        .positions_left(&(0..num_tx).map(|i| i << pow_seg).collect::<Vec<_>>())
-        .positions_right(&(0..num_tx).map(|i| i << pow_shared).collect::<Vec<_>>())
         .position_mappings(&mappings)
         .build(rng).unwrap();
     println!("setup time: {:?} ms", curr_time.elapsed().as_millis());

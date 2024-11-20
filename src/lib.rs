@@ -34,8 +34,6 @@ mod tests {
         let pp = PublicParameters::<Bn254>::builder()
             .size_left_values(8)
             .size_right_values(16)
-            .positions_left(&[0, 2, 4, 6])
-            .positions_right(&[0, 4, 8, 12])
             .position_mappings(&mappings)
             .build(rng).unwrap();
 
