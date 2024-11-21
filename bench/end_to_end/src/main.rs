@@ -16,7 +16,7 @@ fn generate_inputs(num_tx: usize, pow_seg: usize, pow_shared: usize) -> (
     let mut mappings = BTreeMap::new();
     for i in 0..num_tx {
         mappings.insert(i << pow_seg, i << pow_shared);
-        mappings.insert((i << pow_seg)+1, (i << pow_shared)+1);
+        mappings.insert((i << pow_seg) + 1, (i << pow_shared) + 1);
     }
     let num_left_values = (1 << pow_seg) * num_tx;
     let num_right_values = (1 << pow_shared) * num_tx;
@@ -41,7 +41,7 @@ fn generate_inputs(num_tx: usize, pow_seg: usize, pow_shared: usize) -> (
 }
 
 const NUM_ITER: usize = 5;
-const SHARED_POW_VEC: [usize; 8] = [9, 10, 11, 12, 13, 14, 15, 16];
+const SHARED_POW_VEC: [usize; 13] = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 const NUM_TX: usize = 1024;
 const POW_SEG: usize = 6;
 
